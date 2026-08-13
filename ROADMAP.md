@@ -257,9 +257,9 @@ Mengacu ke `Roadmap-LLM-OnPremise.md` §Keamanan (repo `medinovav2`), poin yang 
 |---|---|---|---|
 | 0. Prasyarat & Scoping | Konfirmasi spek Mac Mini, topologi jaringan, lokasi folder repo (§14) | — | ✅ Sebagian besar selesai (spek Mac Mini, lokasi folder); topologi jaringan masih terbuka |
 | 1. Lengkapi Sumber Data | Isi ambang batas sheet "Diagnosis" (masih stub), kumpulkan teks resmi regulasi eksternal (Permenaker 5/2018, JNC 8, PERKENI) dari sumber primer | Kerja non-teknis, perlu dokter/analis medis | Belum mulai |
-| 2. Corpus & Ingest Pipeline | Bangun chunk markdown untuk seluruh ~40 parameter Interpretasi Lab (pola sama seperti 5 contoh di ragdoc), tulis `ingest.py`, verifikasi retrieval manual (query per parameter+arah, cek chunk yang benar kembali, cek kasus kosong tidak dipaksa) | Fase 1 (khusus sheet Diagnosis) | Skeleton `ingest.py` sudah ada, logika belum diisi |
-| 3. LLM Serving POC | Install Ollama, uji 2–3 model kandidat (§5) untuk kualitas narasi Bahasa Indonesia medis, benchmark latency di hardware Mac Mini sungguhan | Fase 0 | Belum mulai |
-| 4. RAG Orchestration API | FastAPI: retrieval hybrid (§4), prompt construction (aturan anti-halusinasi eksplisit, mirip system prompt Opsi B §2.1), structured output, field `grounded`/`sumber` | Fase 2, 3 | Skeleton `api/` sudah ada, logika belum diisi |
+| 2. Corpus & Ingest Pipeline | Bangun chunk markdown untuk seluruh ~40 parameter Interpretasi Lab (pola sama seperti 5 contoh di ragdoc), tulis `ingest.py`, verifikasi retrieval manual (query per parameter+arah, cek chunk yang benar kembali, cek kasus kosong tidak dipaksa) | Fase 1 (khusus sheet Diagnosis) | 🔶 `ingest.py` **sudah diimplementasikan penuh** (parse frontmatter → embed bge-m3 → upsert Chroma, field kosong di-skip bukan dipaksa). 6/40 chunk Interpretasi Lab sudah diisi (seed dari 5 contoh di ragdoc + 1 turunan), diverifikasi parse dengan benar (`tests/test_ingest.py`). ~34 parameter sisanya menunggu sumber data Excel |
+| 3. LLM Serving POC | Install Ollama, uji 2–3 model kandidat (§5) untuk kualitas narasi Bahasa Indonesia medis, benchmark latency di hardware Mac Mini sungguhan | Fase 0 | 🔶 Prosedur & skrip siap (`scripts/POC_PROCEDURE.md`, `scripts/benchmark_model.py`) — **eksekusi nyata di Mac Mini belum dilakukan**, harus dijalankan langsung di hardware-nya |
+| 4. RAG Orchestration API | FastAPI: retrieval hybrid (§4), prompt construction (aturan anti-halusinasi eksplisit, mirip system prompt Opsi B §2.1), structured output, field `grounded`/`sumber` | Fase 2, 3 | 🔶 **Sudah diimplementasikan penuh** (`api/retrieval.py`, `api/llm.py`, `api/main.py`) — request schema tervalidasi cocok kontrak §7, logika belum diuji end-to-end (butuh Ollama + ChromaDB terinstall, hanya bisa dilakukan di lingkungan dengan dependency lengkap) |
 | 5. Integrasi Server A | `LabInterpretationProvider` + `MacMiniRagProvider` di `medinovav2`, tampil sebagai draft di alur review lab | Fase 4 | Belum mulai |
 | 6. Security Hardening | §10 diterapkan penuh sebelum data sungguhan (walau agregat) lewat jaringan | Sebelum go-live pilot | Belum mulai |
 | 7. Verifikasi & Pilot | Bandingkan draft AI vs interpretasi dokter untuk sample data (anonim), pastikan nol angka/rujukan yang dikarang, pilot 1 dokter dulu | Fase 5, 6 | Belum mulai |
@@ -271,8 +271,9 @@ Mengacu ke `Roadmap-LLM-OnPremise.md` §Keamanan (repo `medinovav2`), poin yang 
 
 1. Sheet "Diagnosis" — kolom "Hasil" kosong, ambang batas pre-diabetes/diabetes/pre-hipertensi/hipertensi/sindrom metabolik perlu diisi dulu (rujukan: kriteria PERKENI untuk diabetes, JNC 8 untuk hipertensi).
 2. Teks resmi Permenaker No. 5/2018, JNC 8, PERKENI — harus diambil dari sumber primer, bukan disalin dari web.
-3. ~35 parameter Interpretasi Lab lainnya (di luar 5 contoh) belum dibuatkan chunk markdown-nya.
+3. ~34 parameter Interpretasi Lab lainnya (di luar 6 chunk yang sudah dibuat di `corpus/interpretasi_lab/`) belum dibuatkan chunk markdown-nya — butuh file `Excel_Hasil_MCU-interpretasi_dan_tindak_lanjut.xlsx` sebagai sumber, belum tersedia di repo ini.
 4. Topologi jaringan Mac Mini ↔ hosting `medinovav2` — lihat §14.
+5. Eksekusi POC LLM Serving (Fase 3) di Mac Mini sungguhan — prosedur & skrip sudah siap (`scripts/POC_PROCEDURE.md`), tapi harus dijalankan langsung di hardware-nya, belum bisa dilakukan dari sesi ini.
 
 ---
 
