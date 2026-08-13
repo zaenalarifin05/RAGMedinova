@@ -123,6 +123,7 @@ Pendekatan ini juga menjelaskan kenapa embedding model & vector store tidak perl
 | Orkestrasi RAG + API | **Python + FastAPI** | Ekosistem RAG (sentence-transformers, chromadb, ollama client) paling matang di Python; dipisah dari Laravel karena memang aplikasi terpisah sesuai instruksi |
 | Koneksi Server A ↔ B | **Tailscale/WireGuard** + API key/token | Setara mTLS secara fungsional, jalan lintas lokasi fisik (lihat §2) |
 | Kontrol versi corpus | Markdown + YAML frontmatter di git, folder terpisah (§9) | Bisa di-review lewat pull request oleh dokter/analis medis sebelum di-ingest — memenuhi prinsip "update berkala perlu review klinis" dari dokumen contoh |
+| Dashboard observasi traffic | **Python + Django**, DB **MySQL** (terpisah dari MySQL `medinovav2`), dijalankan di Server B yang sama | Memenuhi prinsip keamanan #8 di §10 (audit log & redaksi) — lihat §15 |
 
 > **Keputusan (2026-08-13): default produksi tetap Qwen2.5 7B.** TinyLlama (~1.1B) ditambahkan sebagai **kandidat eksperimental opsional** di Fase 3 POC (§11) — bukan pengganti default. Alasannya dicatat di sini supaya tidak diulang-tanya nanti:
 >
@@ -294,5 +295,62 @@ Mengacu ke `Roadmap-LLM-OnPremise.md` §Keamanan (repo `medinovav2`), poin yang 
 3. ~~**Nama & lokasi folder project baru**~~ — ✅ **Dibuat (2026-08-13): `D:\Learn\medinova-rag-lab`** (repo ini).
 4. **Urutan pengerjaan corpus** — mulai dari sheet "Interpretasi Lab" dulu (paling siap, prioritas "Tinggi" menurut catatan ragdoc) sebelum sheet lain yang masih perlu dilengkapi (Diagnosis) atau prioritas sedang (Ax&Fisik)? Dokumen ini mengasumsikan ya.
 5. **Siapa yang mengerjakan §12.1–12.2** (isi ambang batas Diagnosis, kumpulkan teks regulasi resmi)? Ini kerja klinis/non-teknis, di luar scope coding — perlu ditentukan siapa PIC-nya sebelum Fase 2 bisa lengkap untuk semua kategori (walau Fase 2 bisa mulai duluan khusus sheet Interpretasi Lab yang sudah siap).
+6. **Retention & akses dashboard** (§15) — berapa lama log traffic disimpan sebelum dihapus/diarsip, dan siapa saja yang boleh punya akun admin Django untuk melihatnya? Belum diputuskan, dicatat sebagai prasyarat sebelum go-live (ROADMAP §10 prinsip #8 secara eksplisit mensyaratkan retention period dibatasi).
 
 Setelah keputusan yang tersisa dikonfirmasi, langkah berikutnya adalah mulai Fase 1 (isi sumber data) dan Fase 2 (bangun corpus + ingest pipeline untuk sheet Interpretasi Lab).
+
+---
+
+## 15. Dashboard Observasi Traffic LLM
+
+> ✅ **Skeleton lengkap dibuat (2026-08-13)**, termasuk model, admin, migration, dan satu halaman ringkasan — lihat `dashboard/README.md` untuk cara menjalankan. **Belum diverifikasi jalan dengan MySQL sungguhan** (tidak ada server MySQL di lingkungan penulisan kode), tapi `python manage.py check` dan `makemigrations --check` sudah dijalankan dan lolos bersih di lingkungan dengan Django+PyMySQL terinstall — migration ditulis tangan terkonfirmasi cocok persis dengan `models.py`, bukan cuma lolos syntax-check.
+
+### Tujuan
+
+Mengamati dan meninjau lalu lintas request/response ke LLM on-premise secara detail — kebutuhan yang sudah dicatat sejak awal di §10 prinsip #8 ("audit log & redaksi") tapi belum dikonkretkan. Dashboard ini konkretisasinya.
+
+### Arsitektur
+
+```
+api/main.py (FastAPI, port 8000)
+    │  setelah response tersusun, tulis log (fail-open — gagal tulis TIDAK
+    │  menggagalkan response ke Server A)
+    ▼
+common/audit_log.py  ──raw SQL (PyMySQL)──▶  MySQL: medinova_rag_logs
+                                                  (llm_request_log, llm_finding_log)
+                                                        ▲
+                                                        │  baca saja
+dashboard/ (Django, port 8001) ────────────────────────┘
+    ├─ /admin/   → filter & cari detail per-request/per-temuan (bawaan Django, gratis)
+    └─ /         → ringkasan: volume, latensi, tingkat grounded, parameter paling
+                    sering TIDAK grounded (sinyal prioritas corpus berikutnya, §12)
+```
+
+Keputusan desain paling penting: **FastAPI menulis langsung ke MySQL lewat SQL mentah, tidak memuat Django sama sekali** — supaya proses yang melayani request LLM (butuh responsif) tidak ikut menanggung overhead startup framework Django. Django murni jadi lapisan baca (admin + satu halaman ringkasan). Skema tabel didefinisikan otoritatif di `dashboard/logs/models.py`; query `INSERT` di `common/audit_log.py` harus tetap sinkron manual kalau skema berubah (dicatat sebagai komentar di kedua file).
+
+### Yang disimpan — dan yang sengaja TIDAK disimpan
+
+Hanya metadata traffic: `case_ref` (referensi internal, bukan No. RM/nama), parameter+arah yang ditanyakan, status grounded, latensi, model yang dipakai, dan cuplikan narasi yang dihasilkan (untuk review kualitas). **Tidak ada data pasien** — konsisten dengan prinsip privasi yang sudah dipegang sejak §2/§7 dokumen ini. Database MySQL untuk dashboard ini **terpisah sepenuhnya** dari MySQL milik `medinovav2` — Server B tetap tidak pernah punya kredensial database pasien (§2).
+
+### Kebutuhan Teknis Ringkas
+
+| Bagian | File | Status |
+|---|---|---|
+| Setting MySQL (dipakai FastAPI) | `common/config.py` — field `mysql_*` | Selesai |
+| Penulis log (fail-open) | `common/audit_log.py` | Selesai |
+| Pemanggilan dari endpoint | `api/main.py` — dipanggil tiap request via `asyncio.to_thread` | Selesai |
+| Skema tabel (otoritatif) | `dashboard/logs/models.py` | Selesai |
+| Migration | `dashboard/logs/migrations/0001_initial.py` | Ditulis tangan, **terverifikasi cocok** dengan models.py lewat `makemigrations --check` |
+| Admin | `dashboard/logs/admin.py` | Selesai — read-only (tidak bisa tambah/edit lewat admin, cegah audit trail dipalsukan) |
+| Halaman ringkasan | `dashboard/logs/views.py` + `templates/logs/overview.html` | Selesai |
+
+### Prasyarat Sebelum Dipakai Produksi
+
+1. MySQL server benar-benar terpasang di Server B (`brew install mysql` atau Docker), database + user dibuat sesuai `dashboard/README.md`.
+2. `python manage.py migrate` dijalankan sungguhan (belum pernah, lihat catatan status di atas).
+3. Kebijakan retention log — §14 poin 6, belum diputuskan.
+4. Akses dashboard (`/admin/`) dibatasi ke jaringan privat yang sama dengan API (§2, §10) — jangan expose port 8001 ke luar VPN.
+
+### Estimasi Effort
+
+Sedang — skeleton selesai (model, admin, view, migration, integrasi ke FastAPI), sisanya kerja verifikasi/ops (setup MySQL sungguhan di Server B) bukan penulisan kode baru.

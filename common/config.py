@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     api_auth_token: str = ""
     max_concurrent_requests: int = 1
 
+    # MySQL - audit log untuk dashboard (dashboard/), lihat common/audit_log.py.
+    # Server B TIDAK PERNAH menyimpan kredensial MySQL milik medinovav2 (Server A) -
+    # ini database terpisah, khusus log traffic LLM, tanpa data pasien.
+    mysql_host: str = "127.0.0.1"
+    mysql_port: int = 3306
+    mysql_database: str = "medinova_rag_logs"
+    mysql_user: str = "rag_dashboard"
+    mysql_password: str = ""
+
     @property
     def chroma_persist_path(self) -> Path:
         p = Path(self.chroma_persist_dir)

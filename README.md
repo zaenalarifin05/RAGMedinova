@@ -7,10 +7,11 @@ Server B (AI Tier) untuk fitur draft interpretasi hasil lab MCU — RAG + LLM on
 ## Struktur
 
 ```
-common/             config bersama (.env) dipakai ingest/ dan api/
+common/             config bersama (.env) + audit_log.py (tulis log ke MySQL) dipakai ingest/ dan api/
 corpus/             sumber kebenaran RAG — markdown + YAML frontmatter, satu file = satu chunk (6/~40 terisi)
 ingest/             ingest.py — parse corpus/ → embed (bge-m3) → upsert ke ChromaDB (sudah diimplementasikan)
 api/                FastAPI: retrieval hybrid + panggilan Ollama + structured output (sudah diimplementasikan)
+dashboard/          Django — observasi traffic LLM, baca dari MySQL yang ditulis api/ (lihat dashboard/README.md)
 data/vectorstore/   persistence ChromaDB (gitignored, derived dari corpus/)
 scripts/            POC_PROCEDURE.md + benchmark_model.py untuk POC LLM serving di Mac Mini
 tests/              test_ingest.py — parse_chunk terhadap 6 chunk corpus nyata
@@ -43,3 +44,4 @@ pytest tests/
 1. POC LLM Serving dijalankan nyata di Mac Mini (`scripts/POC_PROCEDURE.md`) — belum dieksekusi.
 2. Sisa ~34 chunk Interpretasi Lab + kategori lain diisi — butuh `Excel_Hasil_MCU-interpretasi_dan_tindak_lanjut.xlsx` (lihat `ROADMAP.md` §12).
 3. Topologi jaringan Mac Mini ↔ `medinovav2` dipastikan (`ROADMAP.md` §14).
+4. MySQL untuk dashboard belum di-setup nyata — `dashboard/README.md` untuk langkahnya, `ROADMAP.md` §15 untuk desainnya.

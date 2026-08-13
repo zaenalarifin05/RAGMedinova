@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <title>Dashboard Traffic LLM — medinova-rag-lab</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #f5f6f8; --surface: #fff; --surface-2: #eaedf0;
+      --ink: #171b1e; --ink-muted: #5b6570; --line: #d8dce1;
+      --good: #2e7d4f; --good-soft: #e4f2ea;
+      --warn: #8f6c14; --warn-soft: #f6efd9;
+      --bad: #a8332b; --bad-soft: #f8e4e2;
+      --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; }
+    header { padding: 1.4rem 2rem; border-bottom: 1px solid var(--line); background: var(--surface); }
+    header h1 { font-family: var(--mono); font-size: 1.05rem; margin: 0 0 0.2rem; }
+    header p { margin: 0; color: var(--ink-muted); font-size: 0.85rem; }
+    header a { color: var(--ink-muted); }
+    main { max-width: 1080px; margin: 0 auto; padding: 1.6rem 2rem 3rem; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; margin-bottom: 1.6rem; }
+    .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 1rem 1.2rem; }
+    .stat .k { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-muted); display: block; margin-bottom: 0.35em; }
+    .stat .v { font-family: var(--mono); font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+    section { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 1.2rem; overflow: hidden; }
+    section h2 { font-family: var(--mono); font-size: 0.82rem; margin: 0; padding: 0.85rem 1.2rem; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 0.55rem 1.2rem; text-align: left; border-bottom: 1px solid var(--line); }
+    th { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-muted); }
+    tbody tr:last-child td { border-bottom: none; }
+    td.num, th.num { font-variant-numeric: tabular-nums; }
+    .badge { display: inline-block; font-family: var(--mono); font-size: 0.68rem; padding: 0.15em 0.55em; border-radius: 999px; }
+    .badge.success { background: var(--good-soft); color: var(--good); }
+    .badge.partial { background: var(--warn-soft); color: var(--warn); }
+    .badge.error { background: var(--bad-soft); color: var(--bad); }
+    .empty { padding: 1.2rem; color: var(--ink-muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dashboard Traffic LLM — medinova-rag-lab</h1>
+    <p>Server B (Mac Mini) — hanya metadata traffic, tidak ada data pasien. Detail lengkap per-request: <a href="/admin/logs/">buka Django admin</a>.</p>
+  </header>
+
+  <main>
+    <div class="stats">
+      <div class="stat"><span class="k">Request 24 jam</span><span class="v">{{ total_24h }}</span></div>
+      <div class="stat"><span class="k">Request 7 hari</span><span class="v">{{ total_7d }}</span></div>
+      <div class="stat"><span class="k">Rerata latensi</span><span class="v">{% if avg_latency_ms %}{{ avg_latency_ms }} ms{% else %}—{% endif %}</span></div>
+      <div class="stat"><span class="k">Tingkat grounded (7 hari)</span><span class="v">{% if grounded_rate is not None %}{{ grounded_rate }}%{% else %}—{% endif %}</span></div>
+    </div>
+
+    <section>
+      <h2>Breakdown status (7 hari)</h2>
+      {% if status_breakdown %}
+      <table>
+        <thead><tr><th>Status</th><th class="num">Jumlah</th></tr></thead>
+        <tbody>
+          {% for row in status_breakdown %}
+          <tr><td><span class="badge {{ row.status }}">{{ row.status }}</span></td><td class="num">{{ row.count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<div class="empty">Belum ada data.</div>{% endif %}
+    </section>
+
+    <section>
+      <h2>Parameter paling sering TIDAK grounded (7 hari) — kandidat prioritas corpus berikutnya</h2>
+      {% if top_ungrounded %}
+      <table>
+        <thead><tr><th>Parameter</th><th>Arah</th><th class="num">Jumlah kejadian</th></tr></thead>
+        <tbody>
+          {% for row in top_ungrounded %}
+          <tr><td>{{ row.parameter }}</td><td>{{ row.arah }}</td><td class="num">{{ row.count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<div class="empty">Tidak ada temuan ungrounded dalam 7 hari terakhir.</div>{% endif %}
+    </section>
+
+    <section>
+      <h2>Request terbaru</h2>
+      {% if recent_requests %}
+      <table>
+        <thead><tr><th>Waktu</th><th>Case Ref</th><th>Status</th><th class="num">Latensi</th><th class="num">Grounded / Total</th></tr></thead>
+        <tbody>
+          {% for r in recent_requests %}
+          <tr>
+            <td>{{ r.requested_at|date:"Y-m-d H:i:s" }}</td>
+            <td><a href="/admin/logs/llmrequestlog/{{ r.id }}/change/">{{ r.case_ref }}</a></td>
+            <td><span class="badge {{ r.status }}">{{ r.status }}</span></td>
+            <td class="num">{% if r.latency_ms %}{{ r.latency_ms }} ms{% else %}—{% endif %}</td>
+            <td class="num">{{ r.findings_grounded }} / {{ r.findings_total }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<div class="empty">Belum ada request tercatat.</div>{% endif %}
+    </section>
+  </main>
+</body>
+</html>
